@@ -248,7 +248,11 @@ export default class GameReader {
 
 	close() {
 		if (this.amongUs) {
-			closeProcess(this.amongUs.handle);
+			try {
+				closeProcess(this.amongUs.handle);
+			} catch (e) {
+				console.error(e);
+			}
 			this.amongUs = null;
 		}
 	}
