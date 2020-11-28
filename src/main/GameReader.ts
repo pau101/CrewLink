@@ -109,9 +109,9 @@ export default class GameReader {
 
 			let openDoors = -1;
 			const allDoorsPtr = this.readMemory<number>('uint32', shipPtr, [ 0x7C ]);
-			const allDoorsCount = this.readMemory<number>('int32', allDoorsPtr, [ 0xC ]);
-			for (let i = 0; i < Math.min(allDoorsCount, 32); i++) {
-				let open = !!this.readMemory<boolean>('byte', allDoorsPtr, [ 0x10 + i * 4, 0x14 ]);
+			const allDoorsCount = Math.min(this.readMemory<number>('int32', allDoorsPtr, [ 0xC ]), 32);
+			for (let i = 0; i < allDoorsCount; i++) {
+				let open = this.readMemory<boolean>('byte', allDoorsPtr, [ 0x10 + i * 4, 0x14 ]);
 				if (!open) {
 					openDoors &= ~(1 << i)
 				}
@@ -120,13 +120,32 @@ export default class GameReader {
 			let isCommsSabotaged: boolean = false;
 			const systemsPtr = this.readMemory<number>('uint32', shipPtr, [ 0x84 ]);
 			if (systemsPtr !== 0) {
-				const commsPtr = this.readDictValue<number>('uint32', systemsPtr, k => this.readMemory<number>('int32', k, []) == 14);
-				const systemType = this.readMemory<number>('int32', commsPtr, [ 0, 0x10 ]);
-				if (systemType === 5873) {
-					isCommsSabotaged = !!this.readMemory<boolean>('byte', commsPtr, [ 0x08 ], false);
-				} else if (systemType === 5868) {
-					isCommsSabotaged = this.readMemory<number>('int32', commsPtr, [ 0xC, 0x10 ]) < 2;
-				}
+				this.readDictionary(systemsPtr, (k, v) => {
+					const key = readMemoryRaw<number>(this.amongUs!.handle, k, 'int32');
+					if (key === 14 || key === 18) {
+						const sysPtr = readMemoryRaw<number>(this.amongUs!.handle, v, 'uint32');
+						if (key === 14) {
+							const systemType = this.readMemory<number>('int32', sysPtr, [ 0, 0x10 ]);
+							if (systemType === 5873) {
+								isCommsSabotaged = !!this.readMemory<boolean>('byte', sysPtr, [ 0x08 ], false);
+							} else if (systemType === 5868) {
+								isCommsSabotaged = this.readMemory<number>('int32', sysPtr, [ 0xC, 0x10 ]) < 2;
+							}
+						} else {
+							const doorType = this.readMemory<number>('int32', sysPtr, [ 0xC, 0, 0x10 ]);
+							if (doorType === 5861) {
+								const upperOpen = this.readMemory<boolean>('byte', sysPtr, [ 0xC, 0xC ], false);
+								if (!upperOpen) {
+									openDoors &= ~(1 << allDoorsCount);
+								}
+								const lowerOpen = this.readMemory<boolean>('byte', sysPtr, [ 0x10, 0xC ], false);
+								if (!lowerOpen) {
+									openDoors &= ~(1 << (1 + allDoorsCount));
+								}
+							}
+						}
+					}
+				});
 			}
 
 			let viewingCameras = 0;
@@ -269,16 +288,13 @@ export default class GameReader {
 		let buffer = readBuffer(this.amongUs!.handle, address + 0xC, length << 1);
 		return buffer.toString('utf8').replace(/\0/g, '');
 	}
-	readDictValue<T>(dataType: DataType, address: number, key: (key: number) => boolean, defaultParam?: T): T {
+	readDictionary(address: number, callback: (keyPtr: number, valPtr: number) => void) {
 		const entries = readMemoryRaw<number>(this.amongUs!.handle, address + 0xC, 'uint32') & 0xffffffff;
 		const len = readMemoryRaw<number>(this.amongUs!.handle, entries + 0xC, 'int32');
 		for (let i = 0; i < len; i++) {
 			const offset = entries + 0x10 + (i * 4 + 2) * 4;
-			if (key(offset)) {
-				return readMemoryRaw<T>(this.amongUs!.handle, offset + 4, dataType);
-			}
+			callback(offset, offset + 4);
 		}
-		return defaultParam as T;
 	}
 
 	parsePlayer(ptr: number, buffer: Buffer): Player {
