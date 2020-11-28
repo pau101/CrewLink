@@ -2,11 +2,12 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import io, { Socket } from 'socket.io-client';
 import Avatar from './Avatar';
 import { GameStateContext, SettingsContext } from './App';
-import { AmongUsState, GameState, Player } from '../main/GameReader';
+import { AmongUsState, GameState, MapType, Player } from '../main/GameReader';
 import Peer from 'simple-peer';
 import { ipcRenderer, remote } from 'electron';
 import VAD from './vad';
 import { ISettings } from './Settings';
+import * as Maps from './Maps';
 
 interface PeerConnections {
 	[peer: string]: Peer.Instance;
@@ -60,49 +61,84 @@ interface OtherDead {
 function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Player, other: Player, gain: GainNode, pan: PannerNode): void {
 	const audioContext = pan.context;
 	pan.positionZ.setValueAtTime(-0.5, audioContext.currentTime);
-	let panPos = [
-		(other.x - me.x),
-		(other.y - me.y)
-	];
-	if (state.gameState === GameState.DISCUSSION || (state.gameState === GameState.LOBBY && !settings.stereoInLobby)) {
+	let panPos: Array<number>;
+	const dist = distSq(me.x, me.y, other.x, other.y);
+	if (state.gameState === GameState.DISCUSSION || state.gameState === GameState.LOBBY) {
 		panPos = [0, 0];
-	}
-	if (isNaN(panPos[0])) panPos[0] = 999;
-	if (isNaN(panPos[1])) panPos[1] = 999;
-	panPos[0] = Math.min(999, Math.max(-999, panPos[0]));
-	panPos[1] = Math.min(999, Math.max(-999, panPos[1]));
-	if (other.inVent) {
-		gain.gain.value = 0;
-		return;
-	}
-	if (me.isDead && other.isDead) {
-		gain.gain.value = 1;
-		pan.positionX.setValueAtTime(panPos[0], audioContext.currentTime);
-		pan.positionY.setValueAtTime(panPos[1], audioContext.currentTime);
-		return;
-	}
-	if (!me.isDead && other.isDead) {
-		gain.gain.value = 0;
-		return;
-	}
-	if (state.gameState === GameState.LOBBY || state.gameState === GameState.DISCUSSION) {
-		gain.gain.value = 1;
-		pan.positionX.setValueAtTime(panPos[0], audioContext.currentTime);
-		pan.positionY.setValueAtTime(panPos[1], audioContext.currentTime);
-	} else if (state.gameState === GameState.TASKS) {
-		// const distance = Math.sqrt(Math.pow(me.x - other.x, 2) + Math.pow(me.y - other.y, 2));
-		gain.gain.value = 1;
-		// gain.gain.value = mapNumber(distance, 0, 2.66, 1, 0);
-		pan.positionX.setValueAtTime(panPos[0], audioContext.currentTime);
-		pan.positionY.setValueAtTime(panPos[1], audioContext.currentTime);
 	} else {
-		gain.gain.value = 0;
+		if (settings.stereo) {
+			panPos = [
+				(other.x - me.x),
+				(other.y - me.y)
+			];
+		} else {
+			panPos = [0, Math.sqrt(dist)];
+		}
 	}
-	if (gain.gain.value === 1 && Math.sqrt(Math.pow(me.x - other.x, 2) + Math.pow(me.y - other.y, 2)) > 7) {
-		gain.gain.value = 0;
+	const maxDist = 6 * 6;
+	let g: number;
+	if (state.gameState === GameState.LOBBY) {
+		g = 1;
+	} else if (state.gameState === GameState.MENU) {
+		g = 0;
+	} else if (other.inVent) {
+		g = 0;
+	} else if (other.isDead) {
+		g = me.isDead && dist <= maxDist ? 1 : 0;
+	} else if (state.gameState === GameState.DISCUSSION) {
+		g = 1;
+	} else if (state.gameState === GameState.TASKS) {
+		let map = Maps.Empty;
+		switch (state.map) {
+			case MapType.THE_SKELD:
+				map = Maps.TheSkeld;
+				break;
+			case MapType.MIRA_HQ:
+				map = Maps.MiraHq;
+				break;
+			case MapType.POLUS:
+				map = Maps.Polus;
+				break;
+		}
+		if (dist > maxDist) {
+			g = 0;
+		} else if (me.isDead) {
+			g = 1;
+		} else if (state.isCommsSabotaged) {
+			g = 0;
+		} else {
+			g = 1 - map.blocked(state, me.x, me.y, other.x, other.y);
+		}
+		if (g < 1 && !state.isCommsSabotaged && state.viewingCameras !== 0) {
+			for (let i = 0; i < map.cameras.length; i++) {
+				const cam = map.cameras[i];
+				const dist = distSq(cam[0], cam[1], other.x, other.y);
+				if (dist < 3 * 3) {
+					g = 1;
+					panPos = [0, Math.sqrt(dist)];
+					break;
+				}
+			}
+		}
+	} else {
+		g = 1;
+	}
+	gain.gain.setTargetAtTime(g, audioContext.currentTime, 0.015);
+	if (g > 0) {
+		if (isNaN(panPos[0])) panPos[0] = 999;
+		if (isNaN(panPos[1])) panPos[1] = 999;
+		panPos[0] = Math.min(999, Math.max(-999, panPos[0]));
+		panPos[1] = Math.min(999, Math.max(-999, panPos[1]));
+		pan.positionX.setValueAtTime(panPos[0], audioContext.currentTime);
+		pan.positionY.setValueAtTime(panPos[1], audioContext.currentTime);
 	}
 }
 
+function distSq(x0: number, y0: number, x1: number, y1: number): number {
+	const dx = x0 - x1;
+	const dy = y0 - y1;
+	return dx * dx + dy * dy;
+}
 
 export default function Voice() {
 	const [settings] = useContext(SettingsContext);
@@ -116,9 +152,11 @@ export default function Voice() {
 	const [otherTalking, setOtherTalking] = useState<OtherTalking>({});
 	const [otherDead, setOtherDead] = useState<OtherDead>({});
 	const audioElements = useRef<AudioElements>({});
+	const audioContext = useRef<AudioContext>(new AudioContext());
 
 	const [deafenedState, setDeafened] = useState(false);
 	const [connected, setConnected] = useState(false);
+
 
 	useEffect(() => {
 		if (!connectionStuff.current.stream) return;
@@ -238,9 +276,7 @@ export default function Voice() {
 				const connection = new Peer({
 					stream, initiator, config: {
 						iceServers: [
-							{
-								'urls': 'stun:stun.l.google.com:19302'
-							}
+							{ 'urls': ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19305' ] },
 						]
 					}
 				});
@@ -253,10 +289,9 @@ export default function Voice() {
 					if (settings.speaker.toLowerCase() !== 'default')
 						(audio as any).setSinkId(settings.speaker);
 
-					const context = new AudioContext();
-					var source = context.createMediaStreamSource(stream);
-					let gain = context.createGain();
-					let pan = context.createPanner();
+					var source = audioContext.current.createMediaStreamSource(stream);
+					let gain = audioContext.current.createGain();
+					let pan = audioContext.current.createPanner();
 					// let compressor = context.createDynamicsCompressor();
 					pan.refDistance = 0.1;
 					pan.panningModel = 'equalpower';
@@ -264,10 +299,10 @@ export default function Voice() {
 					pan.maxDistance = 2.66 * 2;
 					pan.rolloffFactor = 1;
 
-					source.connect(pan);
-					pan.connect(gain);
+					source.connect(gain);
+					pan.connect(audioContext.current.destination);
 					// Source -> pan -> gain -> VAD -> destination
-					VAD(context, gain, context.destination, {
+					VAD(audioContext.current, gain, pan, {
 						onVoiceStart: () => setTalking(true),
 						onVoiceStop: () => setTalking(false),
 						// onUpdate: console.log,

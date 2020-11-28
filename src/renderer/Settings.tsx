@@ -52,7 +52,7 @@ const store = new Store<ISettings>({
 			type: 'boolean',
 			default: false
 		},
-		stereoInLobby: {
+		stereo: {
 			type: 'boolean',
 			default: true
 		}
@@ -77,7 +77,7 @@ export interface ISettings {
 		data: string;
 	},
 	hideCode: boolean;
-	stereoInLobby: boolean;
+	stereo: boolean;
 }
 export const settingsReducer = (state: ISettings, action: {
 	type: 'set' | 'setOne', action: [string, any] | ISettings
@@ -205,13 +205,13 @@ export default function Settings({ open, onClose }: SettingsProps) {
 					});
 				}} onClick={() => updateDevices()}>
 					{
-						speakers.map(d => (
+						speakers.map(d => 
 							<option key={d.id} value={d.id}>{d.label}</option>
-						))
+						)
 					}
 				</select>
 			</div>
-			<div className="form-control" style={{ color: '#f1c40f' }} onClick={() => setSettings({
+			<div className="form-control m" style={{ color: '#f1c40f' }} onClick={() => setSettings({
 				type: 'setOne',
 				action: ['pushToTalk', false]
 			})}>
@@ -250,10 +250,10 @@ export default function Settings({ open, onClose }: SettingsProps) {
 			</div>
 			<div className="form-control m" style={{ color: '#fd79a8' }} onClick={() => setSettings({
 				type: 'setOne',
-				action: ['stereoInLobby', !settings.stereoInLobby]
+				action: ['stereo', !settings.stereo]
 			})}>
-				<input type="checkbox" checked={settings.stereoInLobby} style={{ color: '#fd79a8' }} readOnly />
-				<label>Stereo Audio in Lobbies</label>
+				<input type="checkbox" checked={settings.stereo} style={{ color: '#fd79a8' }} readOnly />
+				<label>Stereo Audio</label>
 			</div>
 		</div>
 	</div>

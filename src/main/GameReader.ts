@@ -7,6 +7,10 @@ export interface AmongUsState {
 	gameState: GameState;
 	oldGameState: GameState;
 	lobbyCode: string;
+	map: MapType;
+	openDoors: number;
+	isCommsSabotaged: boolean;
+	viewingCameras: number;
 	players: Player[];
 }
 export interface Player {
@@ -30,6 +34,9 @@ export interface Player {
 }
 export enum GameState {
 	LOBBY, TASKS, DISCUSSION, MENU, UNKNOWN
+}
+export enum MapType {
+	THE_SKELD, MIRA_HQ, POLUS, UNKNOWN
 }
 
 export default class GameReader {
@@ -93,6 +100,44 @@ export default class GameReader {
 					else
 						state = GameState.TASKS;
 					break;
+			}
+
+			// TODO: unhardcode offsets
+			const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, [ 0x143C110, 0x5C, 0 ]);
+
+			const map: MapType = this.readMemory<number>('int32', shipPtr, [ 0xD4 ], MapType.UNKNOWN);
+
+			let openDoors = -1;
+			const allDoorsPtr = this.readMemory<number>('uint32', shipPtr, [ 0x7C ]);
+			const allDoorsCount = this.readMemory<number>('int32', allDoorsPtr, [ 0xC ]);
+			for (let i = 0; i < Math.min(allDoorsCount, 32); i++) {
+				let open = !!this.readMemory<boolean>('byte', allDoorsPtr, [ 0x10 + i * 4, 0x14 ]);
+				if (!open) {
+					openDoors &= ~(1 << i)
+				}
+			}
+			
+			let isCommsSabotaged: boolean = false;
+			const systemsPtr = this.readMemory<number>('uint32', shipPtr, [ 0x84 ]);
+			if (systemsPtr !== 0) {
+				const commsPtr = this.readDictValue<number>('uint32', systemsPtr, k => this.readMemory<number>('int32', k, []) == 14);
+				const systemType = this.readMemory<number>('int32', commsPtr, [ 0, 0x10 ]);
+				if (systemType === 5873) {
+					isCommsSabotaged = !!this.readMemory<boolean>('byte', commsPtr, [ 0x08 ], false);
+				} else if (systemType === 5868) {
+					isCommsSabotaged = this.readMemory<number>('int32', commsPtr, [ 0xC, 0x10 ]) < 2;
+				}
+			}
+
+			let viewingCameras = 0;
+			const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, [ 0x143BBD4, 0x5C, 0 ]);
+			if (this.readMemory<number>('int32', minigamePtr, [ 0x1C ]) === 0) {
+				const minigameType = this.readMemory<number>('int32', minigamePtr, [ 0, 0x10 ]);
+				if (minigameType === 5823) {
+					viewingCameras = -1;
+				} else if (minigameType == 5740) {
+					viewingCameras = 1 << this.readMemory<number>('int32', minigamePtr, [ 0x64 ])
+				}
 			}
 
 			let allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr) & 0xffffffff;
@@ -161,7 +206,11 @@ export default class GameReader {
 				lobbyCode: this.gameCode,
 				players,
 				gameState: state,
-				oldGameState: this.oldGameState
+				oldGameState: this.oldGameState,
+				map,
+				openDoors,
+				isCommsSabotaged,
+				viewingCameras
 			};
 			let patch = patcher.diff(this.lastState, newState);
 			if (patch) {
@@ -219,6 +268,17 @@ export default class GameReader {
 		// console.log("reading string", length, length << 1);
 		let buffer = readBuffer(this.amongUs!.handle, address + 0xC, length << 1);
 		return buffer.toString('utf8').replace(/\0/g, '');
+	}
+	readDictValue<T>(dataType: DataType, address: number, key: (key: number) => boolean, defaultParam?: T): T {
+		const entries = readMemoryRaw<number>(this.amongUs!.handle, address + 0xC, 'uint32') & 0xffffffff;
+		const len = readMemoryRaw<number>(this.amongUs!.handle, entries + 0xC, 'int32');
+		for (let i = 0; i < len; i++) {
+			const offset = entries + 0x10 + (i * 4 + 2) * 4;
+			if (key(offset)) {
+				return readMemoryRaw<T>(this.amongUs!.handle, offset + 4, dataType);
+			}
+		}
+		return defaultParam as T;
 	}
 
 	parsePlayer(ptr: number, buffer: Buffer): Player {

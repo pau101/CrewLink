@@ -8,8 +8,14 @@ import Settings, { ISettings, settingsReducer } from './Settings';
 
 let appVersion = '';
 if (typeof window !== 'undefined' && window.location) {
-	let query = new URLSearchParams(window.location.search.substring(1));
-	appVersion = (' v' + query.get('version')) || '';
+	let ver;
+	if (process.env.NODE_ENV === 'development') {
+		ver = process.env.npm_package_version;
+	} else {
+		let query = new URLSearchParams(window.location.search.substring(1));
+		ver = query.get('version');
+	}
+	appVersion = ver || '';
 }
 
 
@@ -39,7 +45,7 @@ function App() {
 			data: ''
 		},
 		hideCode: false,
-		stereoInLobby: true
+		stereo: true
 	});
 
 	useEffect(() => {
@@ -83,7 +89,7 @@ function App() {
 		<GameStateContext.Provider value={gameState}>
 			<SettingsContext.Provider value={settings}>
 				<div className="titlebar">
-					<span className="title">CrewLink{appVersion}</span>
+					<span className="title">CrewLink {appVersion}</span>
 					<svg className="titlebar-button settings" onClick={() => setSettingsOpen(!settingsOpen)} enableBackground="new 0 0 24 24" viewBox="0 0 24 24" fill="#868686" width="20px" height="20px">
 						<g>
 							<path d="M0,0h24v24H0V0z" fill="none" />
