@@ -198,28 +198,14 @@ export default class GameReader {
 			}
 			this.lastPlayerPtr = allPlayers;
 
-			let inGame = state === GameState.TASKS || state === GameState.DISCUSSION || state === GameState.LOBBY;
-			let newGameCode = 'MENU';
 			if (state === GameState.LOBBY) {
-				newGameCode = this.readString(
-					this.readMemory<number>('int32', this.gameAssembly.modBaseAddr, this.offsets.gameCode)
-				);
-				if (newGameCode) {
-					let split = newGameCode.split('\r\n');
-					if (split.length === 2 && split[0] === 'Code') {
-						newGameCode = split[1];
-					} else {
-						newGameCode = '';
-					}
-					if (!/^[A-Z]{6}$/.test(newGameCode) || newGameCode === 'MENU') {
-						newGameCode = '';
-					}
+				const code = this.readMemory<number>('int32', this.gameAssembly.modBaseAddr, [ 0x143BE9C, 0x5C, 0, 0x40 ]);
+				if (code) {
+					this.gameCode = this.intToGameCode(code);
 				}
-				// console.log(this.gameCode, newGameCode);
-			} else if (inGame) {
-				newGameCode = '';
+			} else if (state !== GameState.TASKS && state !== GameState.DISCUSSION) {
+				this.gameCode = 'MENU';
 			}
-			if (newGameCode) this.gameCode = newGameCode;
 
 			let newState = {
 				lobbyCode: this.gameCode,
@@ -258,6 +244,15 @@ export default class GameReader {
 			}
 		}
 
+	}
+
+	intToGameCode(code: number): string {
+		const A = 'QWXRTYLPESDFGHUJKZOCVBINMA';
+		const L = 26;
+		if (code === 0) return 'QQQQQQ';
+		let x = code & 0x3FF;
+		let y = (code >> 10) & 0xFFFFF;
+		return A[x % L] + A[x / L | 0] + A[y % L] + A[(y /= L) % L | 0] + A[(y /= L) % L | 0] + A[(y /= L) % L | 0];
 	}
 
 	readMemory<T>(dataType: DataType, address: number, offsets: number[], defaultParam?: T): T {
