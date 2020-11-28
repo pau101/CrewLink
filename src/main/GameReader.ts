@@ -1,4 +1,4 @@
-import { DataType, findModule, getProcesses, ModuleObject, openProcess, ProcessObject, readBuffer, readMemory as readMemoryRaw } from "memoryjs";
+import { DataType, findModule, getProcesses, ModuleObject, openProcess, closeProcess, ProcessObject, readBuffer, readMemory as readMemoryRaw } from "memoryjs";
 import * as Struct from 'structron';
 import patcher from '../patcher';
 import { IOffsets } from "./hook";
@@ -64,10 +64,10 @@ export default class GameReader {
 				this.gameAssembly = findModule('GameAssembly.dll', this.amongUs.th32ProcessID);
 				this.reply('gameOpen', true);
 			} catch (e) {
-				this.amongUs = null;
+				this.close();
 			}
 		} else if (this.amongUs && !processOpen) {
-			this.amongUs = null;
+			this.close();
 			this.reply('gameOpen', false);
 		}
 		return;
@@ -244,6 +244,13 @@ export default class GameReader {
 			}
 		}
 
+	}
+
+	close() {
+		if (this.amongUs) {
+			closeProcess(this.amongUs.handle);
+			this.amongUs = null;
+		}
 	}
 
 	intToGameCode(code: number): string {

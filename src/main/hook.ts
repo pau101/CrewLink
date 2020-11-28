@@ -145,7 +145,7 @@ ipcMain.on('start', async (event) => {
 		}
 		frame();
 	} else if (gameReader) {
-		gameReader.amongUs = null;
+		gameReader.close();
 	}
 	event.reply('started');
 });

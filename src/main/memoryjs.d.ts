@@ -16,6 +16,8 @@ declare module 'memoryjs' {
 	}
 
 	export function openProcess(identifier: string, callback?: Callback<ProcessObject>): ProcessObject;
+	
+	export function closeProcess(handle: number): void;
 
 	export function getProcesses(callback?: Callback<ProcessObject[]>): ProcessObject[];
 
