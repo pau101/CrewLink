@@ -152,7 +152,17 @@ export default function Voice() {
 	const [otherTalking, setOtherTalking] = useState<OtherTalking>({});
 	const [otherDead, setOtherDead] = useState<OtherDead>({});
 	const audioElements = useRef<AudioElements>({});
-	const audioContext = useRef<AudioContext>(new AudioContext());
+	const audioOut = useMemo<({ctx: AudioContext, dest: AudioNode})>(() => {
+		const ctx = new AudioContext();
+		const dest = ctx.destination;
+		const compressor = ctx.createDynamicsCompressor();
+		compressor.threshold.value = -10;
+		compressor.ratio.value = 3;
+		compressor.attack.value = 0;
+		compressor.release.value = 0.25;
+		compressor.connect(dest);
+		return { ctx, dest: compressor };
+	}, []);
 
 	const [deafenedState, setDeafened] = useState(false);
 	const [connected, setConnected] = useState(false);
@@ -182,7 +192,7 @@ export default function Voice() {
 		}
 	}, [gameState.gameState]);
 
-	// const [audioContext] = useState<AudioContext>(() => new AudioContext());
+	// const [audioOut.ctx] = useState<audioOut.ctx>(() => new audioOut.ctx());
 	const connectionStuff = useRef<ConnectionStuff>({ pushToTalk: settings.pushToTalk, deafened: false } as any);
 	useEffect(() => {
 		console.log(gameState);
@@ -200,7 +210,6 @@ export default function Voice() {
 		// Initialize variables
 		let audioListener: any;
 		let audio: boolean | MediaTrackConstraints = true;
-
 
 		// Get microphone settings
 		if (settings.microphone.toLowerCase() !== 'default')
@@ -289,20 +298,18 @@ export default function Voice() {
 					if (settings.speaker.toLowerCase() !== 'default')
 						(audio as any).setSinkId(settings.speaker);
 
-					var source = audioContext.current.createMediaStreamSource(stream);
-					let gain = audioContext.current.createGain();
-					let pan = audioContext.current.createPanner();
-					// let compressor = context.createDynamicsCompressor();
+					var source = audioOut.ctx.createMediaStreamSource(stream);
+					let gain = audioOut.ctx.createGain();
+					let pan = audioOut.ctx.createPanner();
 					pan.refDistance = 0.1;
 					pan.panningModel = 'equalpower';
 					pan.distanceModel = 'linear';
-					pan.maxDistance = 2.66 * 2;
+					pan.maxDistance = 2.4;
 					pan.rolloffFactor = 1;
 
 					source.connect(gain);
-					pan.connect(audioContext.current.destination);
-					// Source -> pan -> gain -> VAD -> destination
-					VAD(audioContext.current, gain, pan, {
+					gain.connect(pan);
+					VAD(audioOut.ctx, pan, audioOut.dest, {
 						onVoiceStart: () => setTalking(true),
 						onVoiceStop: () => setTalking(false),
 						// onUpdate: console.log,
@@ -321,9 +328,9 @@ export default function Voice() {
 					// compressor.connect();
 
 					// console.log(pan, audio);
-					// pan.pan.setValueAtTime(-1, audioContext.currentTime);
+					// pan.pan.setValueAtTime(-1, audioOut.ctxTime);
 					// source.connect(pan);
-					// pan.connect(audioContext.destination);
+					// pan.connect(audioOut.ctx.destination);
 					audioElements.current[peer] = { element: audio, gain, pan };
 
 					// audioListeners[peer] = audioActivity(stream, (level) => {
