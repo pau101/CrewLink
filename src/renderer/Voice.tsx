@@ -306,6 +306,7 @@ export default function Voice() {
 						document.body.removeChild(audioElements.current[peer].element);
 						audioElements.current[peer].pan.disconnect();
 						audioElements.current[peer].gain.disconnect();
+						audioElements.current[peer].camsGain.disconnect();
 						delete audioElements.current[peer];
 					}
 					if (audioListeners[peer]) {
@@ -365,7 +366,7 @@ export default function Voice() {
 					source.connect(camsGain);
 					camsGain.connect(audioOut.cams);
 					audioElements.current[peer] = { element: audio, gain, pan, camsGain };
-
+					
 					// audioListeners[peer] = audioActivity(stream, (level) => {
 					// 	setSocketPlayerIds(socketPlayerIds => {
 					// 		setOtherTalking(old => ({
@@ -438,7 +439,7 @@ export default function Voice() {
 		}
 
 		return otherPlayers;
-	}, [gameState]);
+	}, [gameState, socketPlayerIds]);
 
 	useEffect(() => {
 		if (connect?.connect && gameState.lobbyCode && myPlayer?.id !== undefined) {
