@@ -87,7 +87,7 @@ function Canvas({ hat, skin, color, shadow, isAlive }: CanvasProps) {
 
 				// body color
 				ctx.beginPath();
-				ctx.arc(0.57, 0.375, 0.45, 0, 2 * Math.PI, false);
+				ctx.arc(0.55, 0.4, 0.45, 0, 2 * Math.PI, false);
 				ctx.fillStyle = Color(color).string()
 				ctx.fill();
 				ctx.beginPath();
