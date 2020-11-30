@@ -102,43 +102,42 @@ export default class GameReader {
 					break;
 			}
 
-			// TODO: unhardcode offsets
-			const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, [ 0x143C110, 0x5C, 0 ]);
+			const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.ship);
 
-			const map: MapType = this.readMemory<number>('int32', shipPtr, [ 0xD4 ], MapType.UNKNOWN);
+			const map: MapType = this.readMemory<number>('int32', shipPtr, this.offsets.map, MapType.UNKNOWN);
 
 			let openDoors = -1;
-			const allDoorsPtr = this.readMemory<number>('uint32', shipPtr, [ 0x7C ]);
+			const allDoorsPtr = this.readMemory<number>('uint32', shipPtr, this.offsets.allDoorsPtr);
 			const allDoorsCount = Math.min(this.readMemory<number>('int32', allDoorsPtr, [ 0xC ]), 32);
 			for (let i = 0; i < allDoorsCount; i++) {
-				let open = this.readMemory<boolean>('byte', allDoorsPtr, [ 0x10 + i * 4, 0x14 ]);
+				let open = this.readMemory<boolean>('byte', allDoorsPtr, [ 0x10 + i * 4, this.offsets.plainDoorIsOpen ]);
 				if (!open) {
 					openDoors &= ~(1 << i)
 				}
 			}
 			
 			let isCommsSabotaged: boolean = false;
-			const systemsPtr = this.readMemory<number>('uint32', shipPtr, [ 0x84 ]);
+			const systemsPtr = this.readMemory<number>('uint32', shipPtr, this.offsets.systemsPtr);
 			if (systemsPtr !== 0) {
 				this.readDictionary(systemsPtr, (k, v) => {
 					const key = readMemoryRaw<number>(this.amongUs!.handle, k, 'int32');
-					if (key === 14 || key === 18) {
+					if (key === this.offsets.commsSystemType || key === this.offsets.deconSystemType) {
 						const sysPtr = readMemoryRaw<number>(this.amongUs!.handle, v, 'uint32');
-						if (key === 14) {
+						if (key === this.offsets.commsSystemType) {
 							const systemType = this.readMemory<number>('int32', sysPtr, [ 0, 0x10 ]);
-							if (systemType === 5873) {
-								isCommsSabotaged = !!this.readMemory<boolean>('byte', sysPtr, [ 0x08 ], false);
-							} else if (systemType === 5868) {
-								isCommsSabotaged = this.readMemory<number>('int32', sysPtr, [ 0xC, 0x10 ]) < 2;
+							if (systemType === this.offsets.hudOverrideSystemDefIndex) {
+								isCommsSabotaged = !!this.readMemory<boolean>('byte', sysPtr, this.offsets.hudOverrideSystemIsActive, false);
+							} else if (systemType === this.offsets.hqHudSystemDefIndex) {
+								isCommsSabotaged = this.readMemory<number>('int32', sysPtr, this.offsets.hqHudSystemCompletedCount) < 2;
 							}
 						} else {
-							const doorType = this.readMemory<number>('int32', sysPtr, [ 0xC, 0, 0x10 ]);
-							if (doorType === 5861) {
-								const upperOpen = this.readMemory<boolean>('byte', sysPtr, [ 0xC, 0xC ], false);
+							const doorType = this.readMemory<number>('int32', sysPtr, [ this.offsets.upperManualDoor, 0, 0x10 ]);
+							if (doorType === this.offsets.manualDoorDefIndex) {
+								const upperOpen = this.readMemory<boolean>('byte', sysPtr, [ this.offsets.upperManualDoor, this.offsets.manualDoorIsOpen ], false);
 								if (!upperOpen) {
 									openDoors &= ~(1 << allDoorsCount);
 								}
-								const lowerOpen = this.readMemory<boolean>('byte', sysPtr, [ 0x10, 0xC ], false);
+								const lowerOpen = this.readMemory<boolean>('byte', sysPtr, [ this.offsets.lowerManualDoor, this.offsets.manualDoorIsOpen ], false);
 								if (!lowerOpen) {
 									openDoors &= ~(1 << (1 + allDoorsCount));
 								}
@@ -149,13 +148,13 @@ export default class GameReader {
 			}
 
 			let viewingCameras = 0;
-			const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, [ 0x143BBD4, 0x5C, 0 ]);
-			if (this.readMemory<number>('int32', minigamePtr, [ 0x1C ]) === 0) {
+			const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.minigame);
+			if (this.readMemory<number>('int32', minigamePtr, this.offsets.minigameClosingState) === 0) {
 				const minigameType = this.readMemory<number>('int32', minigamePtr, [ 0, 0x10 ]);
-				if (minigameType === 5823) {
+				if (minigameType === this.offsets.surveillanceDefIndex) {
 					viewingCameras = -1;
-				} else if (minigameType == 5740) {
-					viewingCameras = 1 << this.readMemory<number>('int32', minigamePtr, [ 0x64 ])
+				} else if (minigameType == this.offsets.polusSurveillanceDefIndex) {
+					viewingCameras = 1 << this.readMemory<number>('int32', minigamePtr, this.offsets.polusSurveillanceCurrentCamera)
 				}
 			}
 

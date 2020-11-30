@@ -28,6 +28,26 @@ export interface IOffsets {
 	playerAddrPtr: number;
 	exiledPlayerId: number[];
 	gameCode: number[];
+	ship: number[];
+	map: number[];
+	allDoorsPtr: number[];
+	plainDoorIsOpen: number;
+	systemsPtr: number[];
+	commsSystemType: number;
+	hudOverrideSystemDefIndex: number;
+	hudOverrideSystemIsActive: number[];
+	hqHudSystemDefIndex: number;
+	hqHudSystemCompletedCount: number[];
+	deconSystemType: number;
+	manualDoorDefIndex: number;
+	upperManualDoor: number;
+	lowerManualDoor: number;
+	manualDoorIsOpen: number;
+	minigame: number[];
+	minigameClosingState: number[];
+	surveillanceDefIndex: number;
+	polusSurveillanceDefIndex: number;
+	polusSurveillanceCurrentCamera: number[];
 	player: {
 		isLocal: number[];
 		localX: number[];
@@ -64,23 +84,23 @@ async function loadOffsets(event: Electron.IpcMainEvent): Promise<IOffsets | und
 	}
 
 	let data: string;
-	let offsetStore = store.get('offsets') || {};
-	if (version === offsetStore.version) {
-		data = offsetStore.data;
-	} else {
-		try {
-			const response = await axios({
-				url: `http://${store.get('serverIP')}/${version}.yml`
-			});
-			data = response.data;
-		} catch (_e) {
-			let e = _e as AxiosError;
-			console.error(e);
-			if (e?.response?.status === 404) {
-				event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\nThis might be because you are on an unsupported version of Among Us.`);
-			} else {
-				event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\n${e}`);
-			}
+	try {
+		const response = await axios({
+			url: `http://${store.get('serverIP')}/${version}.yml`
+		});
+		data = response.data;
+	} catch (_e) {
+		let e = _e as AxiosError;
+		console.error(e);
+		let offsetStore = store.get('offsets') || {};
+		if (version === offsetStore.version) {
+			data = offsetStore.data;
+			event.reply('info', `Couldn't fetch the latest game offsets from server, will use cached values.`);
+		} else if (e?.response?.status === 404) {
+			event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\nThis might be because you are on an unsupported version of Among Us.`);
+			return;
+		} else {
+			event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\n${e}`);
 			return;
 		}
 	}
