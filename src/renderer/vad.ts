@@ -75,6 +75,7 @@ export default class VAD {
 		this.onVoiceStart = options.onVoiceStart;
 		this.onVoiceStop = options.onVoiceStop;
 		this.onUpdate = options.onUpdate;
+		this.isNoiseCapturing = options.noiseCaptureDuration > 0;
 
 		this.source = source;
 		this.destination = destination;

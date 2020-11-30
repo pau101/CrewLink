@@ -35,6 +35,7 @@ function App() {
 	const settings = useReducer(settingsReducer, {
 		alwaysOnTop: false,
 		microphone: 'Default',
+		microphoneGain: 1,
 		speaker: 'Default',
 		pushToTalk: false,
 		serverIP: '54.193.94.35:9736',

@@ -58,6 +58,49 @@ input[type="checkbox"] {
 	margin-right: 8px;
 }
 
+.fader-holder {
+	width: 60px;
+	height: 80px;
+}
+
+.fader {
+	overflow: hidden;
+	width: 80px;
+	height: 20px;
+	-webkit-appearance: none;
+	background-color: #222;
+	transform: rotate(-90deg) translate(-20px);
+	border: 1px solid rgba(255, 255, 255, 0.5);
+	border-radius: 4px;
+}
+
+.fader:focus {
+	outline: none;
+}
+
+.fader::-webkit-slider-runnable-track {
+	height: 10px;
+	margin-top: -1px;
+}
+
+.fader:after {
+	content: '';
+	background: rgb(89, 235, 59);
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: var(--audio-level);
+	height: 100%;
+	z-index: -1;
+}
+
+.fader::-webkit-slider-thumb {
+	width: 0px;
+	height: 20px;
+	-webkit-appearance: none;
+	box-shadow: -2px -1px 0 4px #777;
+}
+
 select {
 	background: #1d1d1d;
 	border: 1px solid rgba(255, 255, 255, 0.5);

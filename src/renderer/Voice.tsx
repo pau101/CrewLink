@@ -34,6 +34,7 @@ interface SocketIdMap {
 interface ConnectionStuff {
 	socket: typeof Socket;
 	stream: MediaStream;
+	gain: GainNode;
 	pushToTalk: boolean;
 	deafened: boolean;
 }
@@ -232,7 +233,11 @@ export default function Voice() {
 	// const [audioOut.ctx] = useState<audioOut.ctx>(() => new audioOut.ctx());
 	const connectionStuff = useRef<ConnectionStuff>({ pushToTalk: settings.pushToTalk, deafened: false } as any);
 	useEffect(() => {
-		console.log(gameState);
+		if (connectionStuff.current.gain) {
+			connectionStuff.current.gain.gain.value = settings.microphoneGain;
+		}
+	}, [ settings.microphoneGain ]);
+	useEffect(() => {
 		// Connect to voice relay server
 		connectionStuff.current.socket = io(`ws://${settings.serverIP}`, { transports: ['websocket'] });
 		const { socket } = connectionStuff.current;
@@ -271,8 +276,21 @@ export default function Voice() {
 			});
 
 			const ac = new AudioContext();
-			ac.createMediaStreamSource(stream)
-			audioListener = new VAD(ac, ac.createMediaStreamSource(stream), undefined, {
+			let peerStream: MediaStream;
+			let streamNode: AudioNode;
+			if (true) { // settings.microphoneGain !== 1
+				const gain = ac.createGain();
+				connectionStuff.current.gain = gain;
+				gain.gain.value = settings.microphoneGain;
+				const dest = ac.createMediaStreamDestination();
+				ac.createMediaStreamSource(stream).connect(gain).connect(dest);
+				peerStream = dest.stream;
+				streamNode = gain;
+			} else {
+				peerStream = stream;
+				streamNode = ac.createMediaStreamSource(stream);
+			}
+			audioListener = new VAD(ac, streamNode, undefined, {
 				onVoiceStart: () => setTalking(true),
 				onVoiceStop: () => setTalking(false),
 				// onUpdate: console.log,
@@ -320,7 +338,7 @@ export default function Voice() {
 			function createPeerConnection(peer: string, initiator: boolean) {
 				// console.log("Opening connection to ", peer, "Initiator: ", initiator);
 				const connection = new Peer({
-					stream, initiator, config: {
+					stream: peerStream, initiator, config: {
 						iceServers: [
 							{ 'urls': ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19305' ] },
 						]
@@ -346,7 +364,7 @@ export default function Voice() {
 
 					source.connect(gain);
 					gain.connect(pan);
-					const vad = new VAD(audioOut.ctx, pan, audioOut.dest, {
+					new VAD(audioOut.ctx, pan, audioOut.dest, {
 						onVoiceStart: () => setTalking(true),
 						onVoiceStop: () => setTalking(false),
 						// onUpdate: console.log,

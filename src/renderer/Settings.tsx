@@ -1,7 +1,9 @@
+import { remote } from 'electron';
 import Store from 'electron-store';
-import React, { useContext, useEffect, useReducer, useState } from "react";
+import React, { useContext, useEffect, useReducer, useRef, useState } from "react";
 import { SettingsContext } from "./App";
 import './css/settings.css';
+import VAD from './vad';
 
 const keys = new Set(['Space', 'Backspace', 'Delete', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'LControl', 'LShift', 'LAlt', 'RControl', 'RShift', 'RAlt']);
 
@@ -22,6 +24,10 @@ const store = new Store<ISettings>({
 		pushToTalk: {
 			type: 'boolean',
 			default: false,
+		},
+		microphoneGain: {
+			type: 'number',
+			default: 1
 		},
 		serverIP: {
 			type: 'string',
@@ -67,6 +73,7 @@ export interface SettingsProps {
 export interface ISettings {
 	alwaysOnTop: boolean;
 	microphone: string;
+	microphoneGain: number,
 	speaker: string;
 	pushToTalk: boolean;
 	serverIP: string;
@@ -155,6 +162,36 @@ export default function Settings({ open, onClose }: SettingsProps) {
 		}
 	};
 
+	const micFader = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		let audioListener: VAD;
+		let audio: boolean | MediaTrackConstraints = true;
+		if (settings.microphone.toLowerCase() !== 'default')
+			audio = { deviceId: settings.microphone };
+		let media: MediaStream | undefined = undefined;
+		navigator.getUserMedia({ video: false, audio }, async (stream) => {
+			media = stream;
+			const ac = new AudioContext();
+			ac.createMediaStreamSource(stream)
+			audioListener = new VAD(ac, ac.createMediaStreamSource(stream), undefined, {
+				onVoiceStart: () => { },
+				onVoiceStop: () =>  { },
+				onUpdate: v => {
+					micFader.current?.style.setProperty('--audio-level', (100 * v | 0) + '%')
+				},
+				noiseCaptureDuration: 0,
+			});
+		}, error => {
+			console.log(error);
+			remote.dialog.showErrorBox('Error', 'Couldn\'t connect to your microphone:\n' + error);
+		});
+		return () => {
+			audioListener?.destroy();
+			media?.getTracks().forEach(t => t.stop());
+		};
+	}, [ open, settings.microphone ]);
+
 	const microphones = devices.filter(d => d.kind === 'audioinput');
 	const speakers = devices.filter(d => d.kind === 'audiooutput');
 
@@ -183,6 +220,15 @@ export default function Settings({ open, onClose }: SettingsProps) {
 
 			<div className="form-control m l" style={{ color: '#e74c3c' }}>
 				<label>Microphone</label>
+				<div className="fader-holder">
+					<input ref={micFader} className="fader" type="range" min="0" max="3" step="0.05" list="volsettings" value={settings.microphoneGain} onChange={(ev) => setSettings({
+						type: 'setOne',
+						action: ['microphoneGain', +ev.currentTarget.value]
+					})} />
+					<datalist id="volsettings">
+						<option>1</option>
+					</datalist>
+				</div>
 				<select value={settings.microphone} onChange={(ev) => {
 					setSettings({
 						type: 'setOne',
