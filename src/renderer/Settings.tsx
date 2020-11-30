@@ -3,7 +3,6 @@ import Store from 'electron-store';
 import React, { useContext, useEffect, useReducer, useRef, useState } from "react";
 import { SettingsContext } from "./App";
 import './css/settings.css';
-import VAD from './vad';
 
 const keys = new Set(['Space', 'Backspace', 'Delete', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'LControl', 'LShift', 'LAlt', 'RControl', 'RShift', 'RAlt']);
 
@@ -163,9 +162,16 @@ export default function Settings({ open, onClose }: SettingsProps) {
 	};
 
 	const micFader = useRef<HTMLInputElement>(null);
+	const [ micGainNode, setMicGainNode ] = useState<GainNode>();
+	useEffect(() => {
+		if (micGainNode) {
+			micGainNode.gain.value = settings.microphoneGain;
+		}
+	}, [ settings.microphoneGain ]);
 	useEffect(() => {
 		if (!open) return;
-		let audioListener: VAD;
+		let monitorNode: AudioNode;
+		let gainNode: AudioNode;
 		let audio: boolean | MediaTrackConstraints = true;
 		if (settings.microphone.toLowerCase() !== 'default')
 			audio = { deviceId: settings.microphone };
@@ -173,21 +179,31 @@ export default function Settings({ open, onClose }: SettingsProps) {
 		navigator.getUserMedia({ video: false, audio }, async (stream) => {
 			media = stream;
 			const ac = new AudioContext();
-			ac.createMediaStreamSource(stream)
-			audioListener = new VAD(ac, ac.createMediaStreamSource(stream), undefined, {
-				onVoiceStart: () => { },
-				onVoiceStop: () =>  { },
-				onUpdate: v => {
-					micFader.current?.style.setProperty('--audio-level', (100 * v | 0) + '%')
-				},
-				noiseCaptureDuration: 0,
-			});
+			const source = ac.createMediaStreamSource(stream);
+			const gain = ac.createGain();
+			gain.gain.value = settings.microphoneGain;
+			source.connect(gain);
+			const monitor = ac.createScriptProcessor(1024, 1, 1);
+			let peak = 0;
+			monitor.onaudioprocess = e => {
+				const data = e.inputBuffer.getChannelData(0);
+				if (peak) peak -= 0.04;
+				for (let i = 0; i < data.length; i++) {
+					peak = Math.max(peak, Math.abs(data[i]));
+				}
+				micFader.current?.style.setProperty('--audio-level', (100 * peak / (+micFader.current?.max) | 0) + '%');
+			};
+			gain.connect(monitor);
+			monitor.connect(ac.destination);
+			monitorNode = monitor;
+			setMicGainNode(gain);
 		}, error => {
 			console.log(error);
 			remote.dialog.showErrorBox('Error', 'Couldn\'t connect to your microphone:\n' + error);
 		});
 		return () => {
-			audioListener?.destroy();
+			gainNode?.disconnect();
+			monitorNode?.disconnect();
 			media?.getTracks().forEach(t => t.stop());
 		};
 	}, [ open, settings.microphone ]);
@@ -221,7 +237,7 @@ export default function Settings({ open, onClose }: SettingsProps) {
 			<div className="form-control m l" style={{ color: '#e74c3c' }}>
 				<label>Microphone</label>
 				<div className="fader-holder">
-					<input ref={micFader} className="fader" type="range" min="0" max="3" step="0.05" list="volsettings" value={settings.microphoneGain} onChange={(ev) => setSettings({
+					<input ref={micFader} className="fader" type="range" min="0" max="2" step="0.05" list="volsettings" value={settings.microphoneGain} onChange={(ev) => setSettings({
 						type: 'setOne',
 						action: ['microphoneGain', +ev.currentTarget.value]
 					})} />
