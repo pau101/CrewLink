@@ -17,7 +17,7 @@ interface VADOptions {
 
 export default class VAD {
 	private audioContext: AudioContext;
-	private analyser: AnalyserNode;
+	analyser: AnalyserNode;
 	private source: AudioNode;
 	private destination: AudioNode | undefined;
 	private scriptProcessorNode: ScriptProcessorNode;
@@ -83,7 +83,7 @@ export default class VAD {
 		this.analyser.smoothingTimeConstant = options.smoothingTimeConstant;
 		this.analyser.fftSize = options.fftSize;
 
-		this.scriptProcessorNode = audioContext.createScriptProcessor(options.bufferLen, 2, 2);
+		this.scriptProcessorNode = audioContext.createScriptProcessor(options.bufferLen, 1, 1);
 		this.connect();
 		this.scriptProcessorNode.onaudioprocess = e => this.monitor(e);
 
@@ -109,6 +109,10 @@ export default class VAD {
 		this.voiceScale = 1 - this.baseLevel;
 
 		//console.log('VAD: base level:', baseLevel);
+	}
+
+	send(node: AudioNode) {
+		node.connect(this.analyser);
 	}
 
 	connect() {

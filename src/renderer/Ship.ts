@@ -3,12 +3,14 @@ import { AmongUsState } from '../main/GameReader';
 export default class Ship {
   private points: Float32Array;
   private walls: Uint16Array;
+  private windows: Uint16Array;
   private doors: Array<Uint16Array>;
   cameras: Array<number[]>;
 
-  private constructor(points: Float32Array, walls: Uint16Array, doors: Array<Uint16Array>, cameras: Array<number[]>) {
+  private constructor(points: Float32Array, walls: Uint16Array, windows: Uint16Array, doors: Array<Uint16Array>, cameras: Array<number[]>) {
     this.points = points;
     this.walls = walls;
+    this.windows = windows;
     this.doors = doors;
     this.cameras = cameras;
   }
@@ -18,6 +20,10 @@ export default class Ship {
     const wall = this.intersects(this.walls, mx, my, nx, ny);
     if (wall !== 0) {
       return wall;
+    }
+    const window = this.intersects(this.windows, mx, my, nx, ny);
+    if (window !== 0) {
+      return 0.5;
     }
     for (let i = 0; i < this.doors.length; i++) {
       if ((state.openDoors & (1 << i)) === 0) {
@@ -74,6 +80,18 @@ export default class Ship {
       }
       lines.pop();
     }
+    const windows: number[] = [];
+    for (const path of json.windows) {
+      for (const point of path) {
+        const x: number = point[0];
+        const y: number = point[1];
+        points.push(x);
+        points.push(y);
+        windows.push(index);
+        index += 2;
+      }
+      windows.pop();
+    }
     for (const path of json.doors) {
       const doorLines: number[] = [];
       for (const point of path) {
@@ -84,12 +102,13 @@ export default class Ship {
         doorLines.push(index);
         index += 2;
       }
+      doorLines.pop();
       doors.push(Uint16Array.from(doorLines));
     }
     const cameras = [];
     for (const cam of json.cameras) {
       cameras.push(cam.slice(0, 2));
     }
-    return new Ship(Float32Array.from(points), Uint16Array.from(lines), doors, cameras);
+    return new Ship(Float32Array.from(points), Uint16Array.from(lines),  Uint16Array.from(windows), doors, cameras);
   }
 }

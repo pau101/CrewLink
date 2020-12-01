@@ -15,13 +15,15 @@ interface PeerConnections {
 interface InCall {
 	[peer: string]: boolean;
 }
+interface PeerAudio {
+	element: HTMLAudioElement;
+	gain: GainNode;
+	pan: PannerNode;
+	camsGain: GainNode;
+	muffledGain: GainNode;
+}
 interface AudioElements {
-	[peer: string]: {
-		element: HTMLAudioElement;
-		gain: GainNode;
-		pan: PannerNode;
-		camsGain: GainNode;
-	};
+	[peer: string]: PeerAudio;
 }
 interface AudioListeners {
 	[peer: string]: any;
@@ -60,9 +62,9 @@ interface OtherDead {
 // 	return clamp((n - oldLow) / (oldHigh - oldLow) * (newHigh - newLow) + newLow, newLow, newHigh);
 // }
 
-function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Player, other: Player, gain: GainNode, pan: PannerNode, gainCams: GainNode): void {
-	const audioContext = pan.context;
-	pan.positionZ.setValueAtTime(-0.5, audioContext.currentTime);
+function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Player, other: Player, audio: PeerAudio): void {
+	const audioContext = audio.pan.context;
+	audio.pan.positionZ.setValueAtTime(-0.5, audioContext.currentTime);
 	let panPos: Array<number>;
 	const dist = distSq(me.x, me.y, other.x, other.y);
 	if (state.gameState === GameState.DISCUSSION || state.gameState === GameState.LOBBY) {
@@ -115,6 +117,7 @@ function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Playe
 		if (g < 1 && !state.isCommsSabotaged && state.viewingCameras !== 0) {
 			const r = 3;
 			for (let i = 0; i < map.cameras.length; i++) {
+				if ((state.viewingCameras & (1 << i)) === 0) continue;
 				const cam = map.cameras[i];
 				const dist = distSq(cam[0], cam[1], other.x, other.y);
 				if (dist < r * r) {
@@ -126,19 +129,27 @@ function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Playe
 	} else {
 		g = 1;
 	}
-	if (gCams !== 0 && gainCams.gain.value < 1) {
-		gainCams.gain.setTargetAtTime(1, audioContext.currentTime, 0.1);
-	} else if (gCams === 0 && gainCams.gain.value > 0) {
-		gainCams.gain.setTargetAtTime(0, audioContext.currentTime, 0.015);
+	if (gCams !== 0 && audio.camsGain.gain.value < 1) {
+		audio.camsGain.gain.setTargetAtTime(1, audioContext.currentTime, 0.1);
+	} else if (gCams === 0 && audio.camsGain.gain.value > 0) {
+		audio.camsGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.015);
 	}
-	gain.gain.setTargetAtTime(g, audioContext.currentTime, 0.015);
+	if (g === 0.5) {
+		audio.muffledGain.gain.setTargetAtTime(1, audioContext.currentTime, 0.015);
+		audio.gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.015);
+	} else {
+		if (audio.muffledGain.gain.value > 0) {
+			audio.muffledGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.015);
+		}
+		audio.gain.gain.setTargetAtTime(g, audioContext.currentTime, 0.015);
+	}
 	if (g > 0) {
 		if (isNaN(panPos[0])) panPos[0] = 999;
 		if (isNaN(panPos[1])) panPos[1] = 999;
 		panPos[0] = Math.min(999, Math.max(-999, panPos[0]));
 		panPos[1] = Math.min(999, Math.max(-999, panPos[1]));
-		pan.positionX.setValueAtTime(panPos[0], audioContext.currentTime);
-		pan.positionY.setValueAtTime(panPos[1], audioContext.currentTime);
+		audio.pan.positionX.setValueAtTime(panPos[0], audioContext.currentTime);
+		audio.pan.positionY.setValueAtTime(panPos[1], audioContext.currentTime);
 	}
 }
 
@@ -159,21 +170,25 @@ function createSecuritySpeaker(context: AudioContext, destination: AudioNode = c
 		}
 		return curve;
 	} 
-	const lowpass = context.createBiquadFilter();
-	lowpass.type = 'lowpass';
-	lowpass.frequency.value = 2000;
-	lowpass.Q.value = 3;
+	const highshelf = context.createBiquadFilter();
+	highshelf.type = 'highshelf';
+	highshelf.frequency.value = 1800;
+	highshelf.gain.value = -6;
+	highshelf.Q.value = 1;
 	const highpass = context.createBiquadFilter();
 	highpass.type = 'highpass';
 	highpass.frequency.value = 1000;
-	highpass.Q.value = 3;
-	lowpass.connect(highpass);
+	highpass.Q.value = 1;
 	const distortion = context.createWaveShaper();
 	distortion.curve = createDistortionCurve(3);
 	distortion.oversample = '4x';
 	highpass.connect(distortion);
-	distortion.connect(destination);
-	return lowpass;
+	const gain = context.createGain();
+	gain.gain.value = 0.6;
+	distortion.connect(highshelf);
+	highshelf.connect(gain);
+	gain.connect(destination);
+	return highpass;
 }
 
 export default function Voice() {
@@ -188,7 +203,7 @@ export default function Voice() {
 	const [otherTalking, setOtherTalking] = useState<OtherTalking>({});
 	const [otherDead, setOtherDead] = useState<OtherDead>({});
 	const audioElements = useRef<AudioElements>({});
-	const audioOut = useMemo<({ctx: AudioContext, dest: AudioNode, cams: AudioNode })>(() => {
+	const audioOut = useMemo<({ctx: AudioContext, dest: AudioNode, cams: AudioNode, muffled: AudioNode })>(() => {
 		const ctx = new AudioContext();
 		const dest = ctx.destination;
 		const compressor = ctx.createDynamicsCompressor();
@@ -199,7 +214,12 @@ export default function Voice() {
 		compressor.connect(dest);
 		const cams = createSecuritySpeaker(ctx, compressor);
 		cams.connect(compressor);
-		return { ctx, dest: compressor, cams };
+		const muffled = ctx.createBiquadFilter();
+		muffled.type = 'lowpass';
+		muffled.frequency.value = 800;
+		muffled.Q.value = 1;
+		muffled.connect(compressor);
+		return { ctx, dest: compressor, cams, muffled };
 	}, []);
 
 	const [deafenedState, setDeafened] = useState(false);
@@ -362,13 +382,27 @@ export default function Voice() {
 					pan.maxDistance = 2.4;
 					pan.rolloffFactor = 1;
 
-					source.connect(gain);
-					gain.connect(pan);
-					new VAD(audioOut.ctx, pan, audioOut.dest, {
+					source.connect(pan);
+					pan.connect(gain);
+					
+					const camsGain = audioOut.ctx.createGain();
+					camsGain.gain.value = 0;
+					source.connect(camsGain);
+					camsGain.connect(audioOut.cams);
+					
+					const muffledGain = audioOut.ctx.createGain();
+					muffledGain.gain.value = 0;
+					pan.connect(muffledGain);
+					muffledGain.connect(audioOut.muffled);
+
+					gain.connect(audioOut.dest);
+					const vad = new VAD(audioOut.ctx, gain, undefined, {
 						onVoiceStart: () => setTalking(true),
-						onVoiceStop: () => setTalking(false),
-						// onUpdate: console.log,
+						onVoiceStop: () => setTalking(false)
 					});
+
+					camsGain.connect(vad.analyser);
+					muffledGain.connect(vad.analyser);
 
 					const setTalking = (talking: boolean) => {
 						setSocketPlayerIds(socketPlayerIds => {
@@ -379,11 +413,7 @@ export default function Voice() {
 							return socketPlayerIds;
 						});
 					};
-					const camsGain = audioOut.ctx.createGain();
-					camsGain.gain.value = 0;
-					source.connect(camsGain);
-					camsGain.connect(audioOut.cams);
-					audioElements.current[peer] = { element: audio, gain, pan, camsGain };
+					audioElements.current[peer] = { element: audio, gain, pan, camsGain, muffledGain };
 					
 					// audioListeners[peer] = audioActivity(stream, (level) => {
 					// 	setSocketPlayerIds(socketPlayerIds => {
@@ -449,7 +479,7 @@ export default function Voice() {
 		for (let player of otherPlayers) {
 			const audio = audioElements.current[playerSocketIds[player.id]];
 			if (audio) {
-				calculateVoiceAudio(gameState, settingsRef.current, myPlayer!, player, audio.gain, audio.pan, audio.camsGain);
+				calculateVoiceAudio(gameState, settingsRef.current, myPlayer!, player, audio);
 				if (connectionStuff.current.deafened) {
 					audio.gain.gain.value = 0;
 				}
