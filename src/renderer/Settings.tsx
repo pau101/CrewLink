@@ -30,7 +30,7 @@ const store = new Store<ISettings>({
 		},
 		server: {
 			type: 'string',
-			default: 'http://crewlinkplus.herokuapp.com'
+			default: 'http://crewlink.paulf.me'
 		},
 		pushToTalkShortcut: {
 			type: 'string',
