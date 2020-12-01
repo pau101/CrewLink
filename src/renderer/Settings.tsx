@@ -30,7 +30,7 @@ const store = new Store<ISettings>({
 		},
 		serverIP: {
 			type: 'string',
-			default: '54.193.94.35:9736'
+			default: 'crewlinkplus.herokuapp.com'
 		},
 		pushToTalkShortcut: {
 			type: 'string',

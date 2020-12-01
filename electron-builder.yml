@@ -1,5 +1,5 @@
 appId: net.ottomated.crewlink
-productName: CrewLink
+productName: CrewLinkPlus
 copyright: Copyright © 2020 Ottomated
 directories:
   output: dist

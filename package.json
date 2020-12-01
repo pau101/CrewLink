@@ -1,11 +1,11 @@
 {
-  "name": "crewlink",
-  "version": "1.2.0-custom",
+  "name": "crewlinkplus",
+  "version": "1.2.0",
   "license": "GPL-3.0-or-later",
   "description": "Free, open, Among Us proximity voice chat",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ottomated/crewlink.git"
+    "url": "https://github.com/pau101/CrewLink.git"
   },
   "funding": {
     "type": "individual",
@@ -16,6 +16,13 @@
     "email": "otto@ottomated.net",
     "url": "https://ottomated.net"
   },
+  "contributors": [
+    {
+      "name": "Paul Fulham",
+      "email": "paul.fulham0@gmail.com",
+      "url": "https://paulf.me"
+    }
+  ],
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
     "dev": "electron-webpack dev",
