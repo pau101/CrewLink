@@ -93,7 +93,7 @@ async function loadOffsets(event: Electron.IpcMainEvent): Promise<IOffsets | und
 		let e = _e as AxiosError;
 		console.error(e);
 		let offsetStore = store.get('offsets') || {};
-		if (false && version === offsetStore.version) {
+		if (version === offsetStore.version) {
 			data = offsetStore.data;
 		} else if (e?.response?.status === 404) {
 			event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\nThis might be because you are on an unsupported version of Among Us.`);

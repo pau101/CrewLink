@@ -198,7 +198,7 @@ export default class GameReader {
 			this.lastPlayerPtr = allPlayers;
 
 			if (state === GameState.LOBBY) {
-				const code = this.readMemory<number>('int32', this.gameAssembly.modBaseAddr, [ 0x143BE9C, 0x5C, 0, 0x40 ]);
+				const code = this.readMemory<number>('int32', this.gameAssembly.modBaseAddr, this.offsets.gameCode);
 				if (code) {
 					this.gameCode = this.intToGameCode(code);
 				}
