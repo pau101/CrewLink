@@ -28,9 +28,9 @@ const store = new Store<ISettings>({
 			type: 'number',
 			default: 1
 		},
-		serverIP: {
+		server: {
 			type: 'string',
-			default: 'crewlinkplus.herokuapp.com'
+			default: 'http://crewlinkplus.herokuapp.com'
 		},
 		pushToTalkShortcut: {
 			type: 'string',
@@ -75,7 +75,7 @@ export interface ISettings {
 	microphoneGain: number,
 	speaker: string;
 	pushToTalk: boolean;
-	serverIP: string;
+	server: string;
 	pushToTalkShortcut: string;
 	deafenShortcut: string;
 	offsets: {
@@ -117,7 +117,7 @@ export default function Settings({ open, onClose }: SettingsProps) {
 
 	useEffect(() => {
 		setUnsavedCount(s => s + 1);
-	}, [settings.microphone, settings.speaker, settings.serverIP]);
+	}, [settings.microphone, settings.speaker, settings.server]);
 
 	const [devices, setDevices] = useState<MediaDevice[]>([]);
 	const [_, updateDevices] = useReducer((state) => state + 1, 0);
@@ -300,8 +300,8 @@ export default function Settings({ open, onClose }: SettingsProps) {
 				<label>Voice Server</label>
 				<input spellCheck={false} type="text" onChange={(ev) => setSettings({
 					type: 'setOne',
-					action: ['serverIP', ev.target.value]
-				})} value={settings.serverIP} />
+					action: ['server', ev.target.value]
+				})} value={settings.server} />
 			</div>
 			<div className="form-control m" style={{ color: '#9b59b6' }} onClick={() => setSettings({
 				type: 'setOne',

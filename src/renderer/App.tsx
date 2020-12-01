@@ -38,7 +38,7 @@ function App() {
 		microphoneGain: 1,
 		speaker: 'Default',
 		pushToTalk: false,
-		serverIP: 'crewlinkplus.herokuapp.com',
+		server: 'http://crewlinkplus.herokuapp.com',
 		pushToTalkShortcut: 'V',
 		deafenShortcut: 'RControl',
 		offsets: {

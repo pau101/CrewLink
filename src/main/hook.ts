@@ -84,10 +84,9 @@ async function loadOffsets(event: Electron.IpcMainEvent): Promise<IOffsets | und
 	}
 
 	let data: string;
+	const url = `${store.get('server')}/${version}.yml`;
 	try {
-		const response = await axios({
-			url: `http://${store.get('serverIP')}/${version}.yml`
-		});
+		const response = await axios({ url });
 		data = response.data;
 	} catch (_e) {
 		let e = _e as AxiosError;
@@ -96,10 +95,10 @@ async function loadOffsets(event: Electron.IpcMainEvent): Promise<IOffsets | und
 		if (version === offsetStore.version) {
 			data = offsetStore.data;
 		} else if (e?.response?.status === 404) {
-			event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\nThis might be because you are on an unsupported version of Among Us.`);
+			event.reply('error', `Couldn't fetch the latest game offsets from the server: ${url}.\nThis might be because you are on an unsupported version of Among Us.`);
 			return;
 		} else {
-			event.reply('error', `Couldn't fetch the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\n${e}`);
+			event.reply('error', `Couldn't fetch the latest game offsets from the server: ${url}.\n${e}`);
 			return;
 		}
 	}
@@ -119,7 +118,7 @@ async function loadOffsets(event: Electron.IpcMainEvent): Promise<IOffsets | und
 		return offsets;
 	} catch (e) {
 		console.error(e);
-		event.reply('error', `Couldn't parse the latest game offsets from the server: http://${store.get('serverIP')}/${version}.yml.\n${e}`);
+		event.reply('error', `Couldn't parse the latest game offsets from the server: ${url}.\n${e}`);
 		return;
 	}
 

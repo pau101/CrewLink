@@ -259,7 +259,8 @@ export default function Voice() {
 	}, [ settings.microphoneGain ]);
 	useEffect(() => {
 		// Connect to voice relay server
-		connectionStuff.current.socket = io(`ws://${settings.serverIP}`, { transports: ['websocket'] });
+		const url = new URL(settings.server);
+		connectionStuff.current.socket = io(`${url.protocol === 'https' ? 'wss' : 'ws'}://${url.host}`, { transports: ['websocket'] });
 		const { socket } = connectionStuff.current;
 
 		socket.on('connect', () => {
