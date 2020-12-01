@@ -30,7 +30,7 @@ const store = new Store<ISettings>({
 		},
 		server: {
 			type: 'string',
-			default: 'http://crewlink.paulf.me'
+			default: 'https://crewlink.paulf.me'
 		},
 		pushToTalkShortcut: {
 			type: 'string',

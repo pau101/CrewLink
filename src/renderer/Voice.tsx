@@ -260,14 +260,17 @@ export default function Voice() {
 	useEffect(() => {
 		// Connect to voice relay server
 		const url = new URL(settings.server);
-		connectionStuff.current.socket = io(`${url.protocol === 'https' ? 'wss' : 'ws'}://${url.host}`, { transports: ['websocket'] });
+		const socketUri = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
+		connectionStuff.current.socket = io(socketUri, { transports: ['websocket'] });
 		const { socket } = connectionStuff.current;
 
 		socket.on('connect', () => {
 			setConnected(true);
+			console.log(`connected: ${socketUri}`);
 		});
 		socket.on('disconnect', () => {
 			setConnected(false);
+			console.log('disconnected');
 		});
 
 		// Initialize variables

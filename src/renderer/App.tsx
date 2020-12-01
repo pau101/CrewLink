@@ -38,7 +38,7 @@ function App() {
 		microphoneGain: 1,
 		speaker: 'Default',
 		pushToTalk: false,
-		server: 'http://crewlink.paulf.me',
+		server: 'https://crewlink.paulf.me',
 		pushToTalkShortcut: 'V',
 		deafenShortcut: 'RControl',
 		offsets: {
