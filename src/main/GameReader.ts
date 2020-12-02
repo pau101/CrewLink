@@ -119,7 +119,7 @@ export default class GameReader {
 			let isCommsSabotaged: boolean = false;
 			const systemsPtr = this.readMemory<number>('uint32', shipPtr, this.offsets.systemsPtr);
 			if (systemsPtr !== 0) {
-				this.readDictionary(systemsPtr, (k, v) => {
+				this.readDictionary(systemsPtr, 32, (k, v) => {
 					const key = readMemoryRaw<number>(this.amongUs!.handle, k, 'int32');
 					if (key === this.offsets.commsSystemType || key === this.offsets.deconSystemType) {
 						const sysPtr = readMemoryRaw<number>(this.amongUs!.handle, v, 'uint32');
@@ -293,9 +293,9 @@ export default class GameReader {
 		let buffer = readBuffer(this.amongUs!.handle, address + 0xC, length << 1);
 		return buffer.toString('utf8').replace(/\0/g, '');
 	}
-	readDictionary(address: number, callback: (keyPtr: number, valPtr: number) => void) {
+	readDictionary(address: number, maxLen: number, callback: (keyPtr: number, valPtr: number) => void) {
 		const entries = readMemoryRaw<number>(this.amongUs!.handle, address + 0xC, 'uint32') & 0xffffffff;
-		const len = readMemoryRaw<number>(this.amongUs!.handle, entries + 0xC, 'int32');
+		const len = Math.min(readMemoryRaw<number>(this.amongUs!.handle, entries + 0xC, 'int32'), maxLen);
 		for (let i = 0; i < len; i++) {
 			const offset = entries + 0x10 + (i * 4 + 2) * 4;
 			callback(offset, offset + 4);
