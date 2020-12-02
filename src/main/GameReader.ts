@@ -287,7 +287,7 @@ export default class GameReader {
 	}
 	readString(address: number): string {
 		if (address === 0) return '';
-		let length = readMemoryRaw<number>(this.amongUs!.handle, address + 0x8, 'int');
+		let length = Math.min(readMemoryRaw<number>(this.amongUs!.handle, address + 0x8, 'int'), 10);
 		// console.log(length);
 		// console.log("reading string", length, length << 1);
 		let buffer = readBuffer(this.amongUs!.handle, address + 0xC, length << 1);
