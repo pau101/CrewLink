@@ -273,6 +273,22 @@ export default function Voice() {
 			console.log('disconnected');
 		});
 
+		const toggleDeafen = () => {
+			if (!connectionStuff.current.stream) return;
+			connectionStuff.current.deafened = !connectionStuff.current.deafened;
+			connectionStuff.current.stream.getAudioTracks()[0].enabled = !connectionStuff.current.deafened;
+			setDeafened(connectionStuff.current.deafened);
+		};
+		ipcRenderer.on('toggleDeafen', toggleDeafen);
+		const pushToTalk = (_: any, pressing: boolean) => {
+			if (!connectionStuff.current.stream) return;
+			if (!connectionStuff.current.pushToTalk) return;
+			if (!connectionStuff.current.deafened) {
+				connectionStuff.current.stream.getAudioTracks()[0].enabled = pressing;
+			}
+		};
+		ipcRenderer.on('pushToTalk', pushToTalk);
+		
 		// Initialize variables
 		let audioListener: any;
 		let audio: boolean | MediaTrackConstraints = true;
@@ -285,19 +301,6 @@ export default function Voice() {
 			connectionStuff.current.stream = stream;
 
 			stream.getAudioTracks()[0].enabled = !settings.pushToTalk;
-
-			ipcRenderer.on('toggleDeafen', () => {
-				connectionStuff.current.deafened = !connectionStuff.current.deafened;
-				stream.getAudioTracks()[0].enabled = !connectionStuff.current.deafened;
-				setDeafened(connectionStuff.current.deafened);
-			});
-			ipcRenderer.on('pushToTalk', (_: any, pressing: boolean) => {
-				if (!connectionStuff.current.pushToTalk) return;
-				if (!connectionStuff.current.deafened) {
-					stream.getAudioTracks()[0].enabled = pressing;
-				}
-				// console.log(stream.getAudioTracks()[0].enabled);
-			});
 
 			const ac = new AudioContext();
 			let peerStream: MediaStream;
@@ -462,6 +465,8 @@ export default function Voice() {
 		return () => {
 			connectionStuff.current.socket.close();
 			audioListener.destroy();
+			ipcRenderer.off('toggleDeafen', toggleDeafen);
+			ipcRenderer.off('pushToTalk', pushToTalk);
 		}
 	}, []);
 
