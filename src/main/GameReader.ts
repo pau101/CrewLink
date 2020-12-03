@@ -167,10 +167,13 @@ export default class GameReader {
 			let exiledPlayerId = this.readMemory<number>('byte', this.gameAssembly.modBaseAddr, this.offsets.exiledPlayerId);
 			let impostors = 0, crewmates = 0;
 
+			
+			const localPlayerId = this.readMemory<number>('byte', this.gameAssembly.modBaseAddr, this.offsets.localPlayerId);
+
 			for (let i = 0; i < Math.min(playerCount, 10); i++) {
 				let { address, last } = this.offsetAddress(playerAddrPtr, this.offsets.player.offsets);
 				let playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
-				let player = this.parsePlayer(address + last, playerData);
+				let player = this.parsePlayer(address + last, playerData, localPlayerId);
 				playerAddrPtr += 4;
 				players.push(player);
 
@@ -302,10 +305,10 @@ export default class GameReader {
 		}
 	}
 
-	parsePlayer(ptr: number, buffer: Buffer): Player {
+	parsePlayer(ptr: number, buffer: Buffer, localPlayerId: number): Player {
 		let { data } = this.PlayerStruct.report(buffer, 0, {});
 
-		let isLocal = this.readMemory<number>('int', data.objectPtr, this.offsets.player.isLocal) !== 0;
+		let isLocal = data.id === localPlayerId;
 
 		let positionOffsets = isLocal ? [
 			this.offsets.player.localX,

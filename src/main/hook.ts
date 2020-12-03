@@ -27,6 +27,7 @@ export interface IOffsets {
 	playerCount: number[];
 	playerAddrPtr: number;
 	exiledPlayerId: number[];
+	localPlayerId: number[];
 	gameCode: number[];
 	ship: number[];
 	map: number[];
@@ -49,7 +50,6 @@ export interface IOffsets {
 	polusSurveillanceDefIndex: number;
 	polusSurveillanceCurrentCamera: number[];
 	player: {
-		isLocal: number[];
 		localX: number[];
 		localY: number[];
 		remoteX: number[];
