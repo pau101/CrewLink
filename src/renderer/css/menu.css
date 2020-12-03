@@ -40,6 +40,7 @@
 	height: 24px;
 	line-height: 24px;
 	color: #d481f6;
+	user-select: none;
 }
 
 .footer {

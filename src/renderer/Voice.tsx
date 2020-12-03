@@ -562,6 +562,7 @@ export default function Voice() {
 					})
 				}
 			</div>
+			<div className="reload-app" onMouseUp={() => remote.getCurrentWindow().reload() }>RELOAD</div>
 		</div>
 	)
 }
