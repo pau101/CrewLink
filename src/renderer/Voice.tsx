@@ -12,9 +12,6 @@ import * as Maps from './Maps';
 interface PeerConnections {
 	[peer: string]: Peer.Instance;
 }
-interface InCall {
-	[peer: string]: boolean;
-}
 interface PeerAudio {
 	element: HTMLAudioElement;
 	gain: GainNode;
@@ -24,9 +21,6 @@ interface PeerAudio {
 }
 interface AudioElements {
 	[peer: string]: PeerAudio;
-}
-interface AudioListeners {
-	[peer: string]: any;
 }
 
 interface SocketIdMap {
@@ -259,7 +253,13 @@ export default function Voice() {
 	}, [ settings.microphoneGain ]);
 	useEffect(() => {
 		// Connect to voice relay server
-		const url = new URL(settings.server);
+		let url;
+		try {
+			url = new URL(settings.server);
+		} catch (e) {
+			remote.dialog.showErrorBox('Invalid URL', 'Bad voice server url:\n\n' + settings.server);
+			return;
+		}
 		const socketUri = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
 		connectionStuff.current.socket = io(socketUri, { transports: ['websocket'] });
 		const { socket } = connectionStuff.current;
@@ -294,13 +294,25 @@ export default function Voice() {
 		let audio: boolean | MediaTrackConstraints = true;
 
 		// Get microphone settings
-		if (settings.microphone.toLowerCase() !== 'default')
+		if (settings.microphone.toLowerCase() !== 'default') {
 			audio = { deviceId: settings.microphone };
+		}
 
-		navigator.getUserMedia({ video: false, audio }, async (stream) => {
+		function openMic(successCallback: NavigatorUserMediaSuccessCallback) {
+			navigator.getUserMedia({ video: false, audio }, successCallback, error => {
+				console.error(error);
+				remote.dialog.showErrorBox('Error', 'Couldn\'t connect to your microphone:\n' + error);
+			});
+		}
+
+		openMic(async (stream) => {
 			connectionStuff.current.stream = stream;
+			
+			const peerConnections: PeerConnections = {};
+			audioElements.current = {};
 
-			stream.getAudioTracks()[0].enabled = !settings.pushToTalk;
+			const audioTrack = stream.getAudioTracks()[0];
+			audioTrack.enabled = !settings.pushToTalk;
 
 			const ac = new AudioContext();
 			let peerStream: MediaStream;
@@ -320,17 +332,22 @@ export default function Voice() {
 			audioListener = new VAD(ac, streamNode, undefined, {
 				onVoiceStart: () => setTalking(true),
 				onVoiceStop: () => setTalking(false),
-				// onUpdate: console.log,
 				noiseCaptureDuration: 1,
 			});
 
-			// audioListener = audioActivity(stream, (level) => {
-			// 	setTalking(level > 0.1);
-			// });
-			const peerConnections: PeerConnections = {};
-			const inCall: InCall = {};
-			audioElements.current = {};
-			const audioListeners: AudioListeners = {};
+			function disconnectPeer(peer: string) {
+				const connection = peerConnections[peer];
+				if (!connection) return;
+				connection.destroy();
+				delete peerConnections[peer];
+				if (audioElements.current[peer]) {
+					document.body.removeChild(audioElements.current[peer].element);
+					audioElements.current[peer].pan.disconnect();
+					audioElements.current[peer].gain.disconnect();
+					audioElements.current[peer].camsGain.disconnect();
+					delete audioElements.current[peer];
+				}
+			}
 
 			const connect = (lobbyCode: string, playerId: number) => {
 				socket.emit('leave');
@@ -338,36 +355,17 @@ export default function Voice() {
 					disconnectPeer(k);
 				});
 				setSocketPlayerIds({});
-
 				if (lobbyCode === 'MENU') return;
-
-				function disconnectPeer(peer: string) {
-					const connection = peerConnections[peer];
-					if (!connection) return;
-					delete inCall[peer];
-					connection.destroy();
-					delete peerConnections[peer];
-					if (audioElements.current[peer]) {
-						document.body.removeChild(audioElements.current[peer].element);
-						audioElements.current[peer].pan.disconnect();
-						audioElements.current[peer].gain.disconnect();
-						audioElements.current[peer].camsGain.disconnect();
-						delete audioElements.current[peer];
-					}
-					if (audioListeners[peer]) {
-						audioListeners[peer].destroy();
-					}
-				}
-
 				socket.emit('join', lobbyCode, playerId);
 			};
 			setConnect({ connect });
 			function createPeerConnection(peer: string, initiator: boolean) {
-				// console.log("Opening connection to ", peer, "Initiator: ", initiator);
+				disconnectPeer(peer);
+
 				const connection = new Peer({
 					stream: peerStream, initiator, config: {
 						iceServers: [
-							{ 'urls': ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19305' ] },
+							{ 'urls': ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19305'] },
 						]
 					}
 				});
@@ -421,22 +419,21 @@ export default function Voice() {
 						});
 					};
 					audioElements.current[peer] = { element: audio, gain, pan, camsGain, muffledGain };
-					
-					// audioListeners[peer] = audioActivity(stream, (level) => {
-					// 	setSocketPlayerIds(socketPlayerIds => {
-					// 		setOtherTalking(old => ({
-					// 			...old,
-					// 			[socketPlayerIds[peer]]: level
-					// 		}));
-					// 		return socketPlayerIds;
-					// 	});
-					// });
 				});
 				connection.on('signal', (data) => {
 					socket.emit('signal', {
 						data,
 						to: peer
 					});
+				});
+				connection.on('error', (error) => {
+					console.log(error);
+					if (initiator) {
+						remote.dialog.showErrorBox('Connection Error', `Unable to establish voice connection: ${error.name}\n\n${error.message}`);
+					}
+				});
+				connection.on('close', () => {
+					disconnectPeer(socket.id);
 				});
 				return connection;
 			}
@@ -457,9 +454,6 @@ export default function Voice() {
 				setSocketPlayerIds(ids);
 			});
 
-		}, (error) => {
-			console.error(error);
-			remote.dialog.showErrorBox('Error', 'Couldn\'t connect to your microphone:\n' + error);
 		});
 
 		return () => {
