@@ -441,10 +441,16 @@ export default function Voice() {
 						to: peer
 					});
 				});
-				connection.on('error', (error) => {
+				connection.on('error', (error: any) => {
 					console.log(error);
 					if (initiator) {
-						remote.dialog.showErrorBox('Connection Error', `A voice connection error occurred: ${error.name}\n\n${error.message}`);
+						if (error.code === 'ERR_CONNECTION_FAILURE') {
+							setTimeout(() => {
+								createPeerConnection(peer, true);
+							}, 500 + Math.random() * 3000 | 0);
+						} else {
+							remote.dialog.showErrorBox('Connection Error', `A voice connection error occurred: ${error.name}\n\n${error.message}`);
+						}
 					}
 				});
 				connection.on('close', () => {
