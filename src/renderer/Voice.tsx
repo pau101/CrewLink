@@ -313,6 +313,21 @@ export default function Voice() {
 
 			const audioTrack = stream.getAudioTracks()[0];
 			audioTrack.enabled = !settings.pushToTalk;
+			audioTrack.addEventListener('ended', () => {
+				remote.dialog.showMessageBox(remote.getCurrentWindow(),
+					{
+						title: 'Audio Disconnected',
+						message: 'The current audio device was disconnected, choose \'Reload\' once reconnected or switch to different device.',
+						buttons: ['Change settings', 'Reload'],
+						defaultId: 1
+					}
+				)
+				.then(res => {
+					if (res.response === 1) {
+						remote.getCurrentWindow().reload();
+					}
+				});
+			});
 
 			const ac = new AudioContext();
 			let peerStream: MediaStream;
@@ -429,10 +444,11 @@ export default function Voice() {
 				connection.on('error', (error) => {
 					console.log(error);
 					if (initiator) {
-						remote.dialog.showErrorBox('Connection Error', `Unable to establish voice connection: ${error.name}\n\n${error.message}`);
+						remote.dialog.showErrorBox('Connection Error', `A voice connection error occurred: ${error.name}\n\n${error.message}`);
 					}
 				});
 				connection.on('close', () => {
+					console.log('Closing peer connection');
 					disconnectPeer(socket.id);
 				});
 				return connection;
