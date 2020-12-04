@@ -197,7 +197,7 @@ export default function Voice() {
 	const [talking, setTalking] = useState(false);
 	const [joinedLobby, setJoinedLobby] = useState<string>('MENU');
 	const [socketPlayerIds, setSocketPlayerIds] = useState<SocketIdMap>({});
-	const [connect, setConnect] = useState<({ connect: (lobbyCode: string, playerId: number) => void }) | null>(null);
+	const [connect, setConnect] = useState<({ connect: (lobbyCode: string, playerId: number) => void, initiatePeer: (peer: string) => void }) | null>(null);
 	const [otherTalking, setOtherTalking] = useState<OtherTalking>({});
 	const [otherDead, setOtherDead] = useState<OtherDead>({});
 	const audioElements = useRef<AudioElements>({});
@@ -380,10 +380,19 @@ export default function Voice() {
 				socket.emit('join', lobbyCode, playerId);
 				console.log(`Joining lobby ${lobbyCode}: ${playerId}`);
 			};
-			setConnect({ connect });
+
+			const initiatePeer = (peer: string) => {
+				const connection = peerConnections[peer];
+				if (!connection || connection.destroyed) {
+					createPeerConnection(peer, true);	
+				}
+			};
+			setConnect({ connect, initiatePeer });
+
 			function createPeerConnection(peer: string, initiator: boolean) {
 				disconnectPeer(peer);
 
+				console.log(`Establishing connection to ${peer}, initator: ${initiator}`);
 				const connection = new Peer({
 					stream: peerStream, initiator, config: {
 						iceServers: [
@@ -469,9 +478,6 @@ export default function Voice() {
 				return connection;
 			}
 			socket.on('join', async (peer: string, playerId: number) => {
-				if (myPlayer && myPlayer.id < playerId) {
-					createPeerConnection(peer, true);
-				}
 				setSocketPlayerIds(old => ({ ...old, [peer]: playerId }));
 			});
 			socket.on('signal', ({ data, from }: any) => {
@@ -492,13 +498,6 @@ export default function Voice() {
 			})
 			socket.on('setIds', (ids: SocketIdMap) => {
 				setSocketPlayerIds(ids);
-				if (myPlayer) {
-					for (let k of Object.keys(ids)) {
-						if (myPlayer.id < ids[k]) {
-							createPeerConnection(k, true);
-						}
-					}
-				}
 			});
 
 		});
@@ -544,15 +543,30 @@ export default function Voice() {
 		}
 	}, [connect?.connect, gameState?.lobbyCode]);
 
+	// useEffect(() => {
+	// 	if (connect?.connect && gameState.lobbyCode && myPlayer?.id !== undefined && gameState.gameState === GameState.LOBBY && (gameState.oldGameState === GameState.DISCUSSION || gameState.oldGameState === GameState.TASKS)) {
+	// 		connect.connect(gameState.lobbyCode, myPlayer.id);
+	// 	}
+	// }, [gameState.gameState]);
+
 	useEffect(() => {
-		if (!myPlayer?.id) return;
+		if (myPlayer?.id === undefined) return;
+		if (connectionStuff.current.socket) {
+			connectionStuff.current.socket.emit('id', myPlayer.id);
+		}
 		const code = gameState?.lobbyCode;
 		if (connect?.connect && code && code !== joinedLobby) {
 			connect.connect(gameState.lobbyCode, myPlayer.id);
-		} else if (connectionStuff.current.socket) {
-			connectionStuff.current.socket.emit('id', myPlayer.id);
 		}
-	}, [myPlayer?.id]);
+	}, [connect?.connect, myPlayer?.id]);
+	useEffect(() => {
+		if (myPlayer?.id === undefined || !connect?.initiatePeer) return;
+		for (let k of Object.keys(socketPlayerIds)) {
+			if (myPlayer.id < socketPlayerIds[k]) {
+				connect.initiatePeer(k);
+			}
+		}
+	}, [connect?.initiatePeer, myPlayer?.id, socketPlayerIds]);
 	return (
 		<div className="root">
 			<div className="top">
