@@ -8,6 +8,7 @@ export const IOffsets = t.iface([], {
   "meetingHud": t.array("number"),
   "meetingHudCachePtr": t.array("number"),
   "meetingHudState": t.array("number"),
+  "exileControllerCachePtr": t.array("number"),
   "gameState": t.array("number"),
   "allPlayersPtr": t.array("number"),
   "allPlayers": t.array("number"),

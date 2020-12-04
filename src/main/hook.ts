@@ -21,6 +21,7 @@ export interface IOffsets {
 	meetingHud: number[];
 	meetingHudCachePtr: number[];
 	meetingHudState: number[];
+	exileControllerCachePtr: number[];
 	gameState: number[];
 	allPlayersPtr: number[];
 	allPlayers: number[];

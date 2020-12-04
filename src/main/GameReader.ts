@@ -44,10 +44,8 @@ export default class GameReader {
 	offsets: IOffsets;
 	PlayerStruct: any;
 
-	menuUpdateTimer = 20;
-	lastPlayerPtr = 0;
-	shouldReadLobby = false;
 	exileCausesEnd = false;
+	waitingExile = false;
 	oldGameState = GameState.UNKNOWN;
 	lastState: AmongUsState = {} as AmongUsState;
 
@@ -77,28 +75,45 @@ export default class GameReader {
 		this.checkProcessOpen();
 		if (this.amongUs !== null && this.gameAssembly !== null) {
 			let state = GameState.UNKNOWN;
-			let meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
-			let meetingHud_cachePtr = meetingHud === 0 ? 0 : this.readMemory<number>('uint32', meetingHud, this.offsets.meetingHudCachePtr);
-			let meetingHudState = meetingHud_cachePtr === 0 ? 4 : this.readMemory('int', meetingHud, this.offsets.meetingHudState, 4);
 			let gameState = this.readMemory<number>('int', this.gameAssembly.modBaseAddr, this.offsets.gameState);
 
 			switch (gameState) {
 				case 0:
 					state = GameState.MENU;
 					this.exileCausesEnd = false;
+					this.waitingExile = false;
 					break;
 				case 1:
 				case 3:
 					state = GameState.LOBBY;
 					this.exileCausesEnd = false;
+					this.waitingExile = false;
 					break;
 				default:
-					if (this.exileCausesEnd)
+					const meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
+					const meetingHud_cachePtr = meetingHud === 0 ? 0 : this.readMemory<number>('uint32', meetingHud, this.offsets.meetingHudCachePtr);
+					const meetingHudState = meetingHud_cachePtr === 0 ? 4 : this.readMemory('int', meetingHud, this.offsets.meetingHudState, 4);
+					if (this.exileCausesEnd) {
 						state = GameState.LOBBY;
-					else if (meetingHudState < 4)
+					} else if (meetingHudState < 4) {
 						state = GameState.DISCUSSION;
-					else
-						state = GameState.TASKS;
+						this.waitingExile = true;
+					} else {
+						if (this.oldGameState === GameState.DISCUSSION) {
+							const exiling = this.readMemory<number>('uint32', this.gameAssembly.modBaseAddr, this.offsets.exileControllerCachePtr, 0) !== 0;
+							if (exiling) {
+								state = GameState.DISCUSSION;
+								this.waitingExile = false;
+							} else if (this.waitingExile) {
+								state = GameState.DISCUSSION;
+							} else {
+								state = GameState.TASKS;
+							}
+						} else {
+							state = GameState.TASKS;
+							this.waitingExile = false;
+						}
+					}
 					break;
 			}
 
@@ -191,14 +206,6 @@ export default class GameReader {
 					state = GameState.LOBBY;
 				}
 			}
-			if (this.oldGameState === GameState.MENU && state === GameState.LOBBY && this.menuUpdateTimer > 0 &&
-				(this.lastPlayerPtr === allPlayers || players.length === 1 || !players.find(p => p.isLocal))) {
-				state = GameState.MENU;
-				this.menuUpdateTimer--;
-			} else {
-				this.menuUpdateTimer = 20;
-			}
-			this.lastPlayerPtr = allPlayers;
 
 			if (state === GameState.LOBBY) {
 				const code = this.readMemory<number>('int32', this.gameAssembly.modBaseAddr, this.offsets.gameCode);
