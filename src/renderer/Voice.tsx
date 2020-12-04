@@ -81,7 +81,7 @@ function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Playe
 	} else if (state.gameState === GameState.MENU) {
 		g = 0;
 	} else if (other.inVent) {
-		g = 0;
+		g = me.inVent ? 1 : 0;
 	} else if (other.isDead) {
 		g = me.isDead && dist <= maxDist ? 1 : 0;
 	} else if (state.gameState === GameState.DISCUSSION) {
@@ -107,6 +107,9 @@ function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Playe
 			g = 0;
 		} else {
 			g = 1 - map.blocked(state, me.x, me.y, other.x, other.y);
+			if (g === 1 && me.inVent) {
+				g = 0.5;
+			}
 		}
 		if (g < 1 && !state.isCommsSabotaged && state.viewingCameras !== 0) {
 			const r = 3;
@@ -192,6 +195,7 @@ export default function Voice() {
 	let { lobbyCode: displayedLobbyCode } = gameState;
 	if (displayedLobbyCode !== 'MENU' && settings.hideCode) displayedLobbyCode = 'LOBBY';
 	const [talking, setTalking] = useState(false);
+	const [joinedLobby, setJoinedLobby] = useState<string>('MENU');
 	const [socketPlayerIds, setSocketPlayerIds] = useState<SocketIdMap>({});
 	const [connect, setConnect] = useState<({ connect: (lobbyCode: string, playerId: number) => void }) | null>(null);
 	const [otherTalking, setOtherTalking] = useState<OtherTalking>({});
@@ -270,6 +274,7 @@ export default function Voice() {
 		});
 		socket.on('disconnect', () => {
 			setConnected(false);
+			setJoinedLobby('MENU');
 			console.log('disconnected');
 		});
 
@@ -370,8 +375,10 @@ export default function Voice() {
 					disconnectPeer(k);
 				});
 				setSocketPlayerIds({});
+				setJoinedLobby(lobbyCode);
 				if (lobbyCode === 'MENU') return;
 				socket.emit('join', lobbyCode, playerId);
+				console.log(`Joining lobby ${lobbyCode}: ${playerId}`);
 			};
 			setConnect({ connect });
 			function createPeerConnection(peer: string, initiator: boolean) {
@@ -444,7 +451,9 @@ export default function Voice() {
 				connection.on('error', (error: any) => {
 					console.log(error);
 					if (initiator) {
-						if (error.code === 'ERR_CONNECTION_FAILURE') {
+						if (error.code !== 'ERR_WEBRTC_SUPPORT' &&
+								error.code !== 'ERR_SIGNALING' &&
+								error.code !== 'ERR_DATA_CHANNEL') {
 							setTimeout(() => {
 								createPeerConnection(peer, true);
 							}, 500 + Math.random() * 3000 | 0);
@@ -460,20 +469,36 @@ export default function Voice() {
 				return connection;
 			}
 			socket.on('join', async (peer: string, playerId: number) => {
-				createPeerConnection(peer, true);
+				if (myPlayer && myPlayer.id < playerId) {
+					createPeerConnection(peer, true);
+				}
 				setSocketPlayerIds(old => ({ ...old, [peer]: playerId }));
 			});
 			socket.on('signal', ({ data, from }: any) => {
 				let connection: Peer.Instance;
-				if (peerConnections[from]) connection = peerConnections[from];
+				if (peerConnections[from] && !peerConnections[from].destroyed) connection = peerConnections[from];
 				else connection = createPeerConnection(from, false);
 				connection.signal(data);
 			});
 			socket.on('setId', (socketId: string, id: number) => {
 				setSocketPlayerIds(old => ({ ...old, [socketId]: id }));
 			})
+			socket.on('deleteId', (socketId: string) => {
+				setSocketPlayerIds(old => {
+					const copy = { ...old };
+					delete copy[socketId];
+					return copy;
+				});
+			})
 			socket.on('setIds', (ids: SocketIdMap) => {
 				setSocketPlayerIds(ids);
+				if (myPlayer) {
+					for (let k of Object.keys(ids)) {
+						if (myPlayer.id < ids[k]) {
+							createPeerConnection(k, true);
+						}
+					}
+				}
 			});
 
 		});
@@ -488,8 +513,7 @@ export default function Voice() {
 
 
 	const myPlayer = useMemo(() => {
-		if (!gameState || !gameState.players) return undefined;
-		else return gameState.players.find(p => p.isLocal);
+		return gameState?.players?.find(p => p.isLocal);
 	}, [gameState]);
 
 	const otherPlayers = useMemo(() => {
@@ -521,13 +545,11 @@ export default function Voice() {
 	}, [connect?.connect, gameState?.lobbyCode]);
 
 	useEffect(() => {
-		if (connect?.connect && gameState.lobbyCode && myPlayer?.id !== undefined && gameState.gameState === GameState.LOBBY && (gameState.oldGameState === GameState.DISCUSSION || gameState.oldGameState === GameState.TASKS)) {
+		if (!myPlayer?.id) return;
+		const code = gameState?.lobbyCode;
+		if (connect?.connect && code && code !== joinedLobby) {
 			connect.connect(gameState.lobbyCode, myPlayer.id);
-		}
-	}, [gameState.gameState]);
-
-	useEffect(() => {
-		if (connectionStuff.current.socket && myPlayer && myPlayer.id !== undefined) {
+		} else if (connectionStuff.current.socket) {
 			connectionStuff.current.socket.emit('id', myPlayer.id);
 		}
 	}, [myPlayer?.id]);
