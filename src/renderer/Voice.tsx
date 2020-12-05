@@ -319,8 +319,9 @@ export default function Voice() {
 			const audioTrack = stream.getAudioTracks()[0];
 			audioTrack.enabled = !settings.pushToTalk;
 			audioTrack.addEventListener('ended', () => {
-				remote.dialog.showMessageBox(remote.getCurrentWindow(),
+				remote.dialog.showMessageBox(
 					{
+						type: 'error',
 						title: 'Audio Disconnected',
 						message: 'The current audio device was disconnected, choose \'Reload\' once reconnected or switch to different device.',
 						buttons: ['Change settings', 'Reload'],
@@ -457,17 +458,21 @@ export default function Voice() {
 						to: peer
 					});
 				});
-				connection.on('error', (error: any) => {
-					console.log(error);
-					if (initiator) {
-						if (error.code !== 'ERR_WEBRTC_SUPPORT' &&
-								error.code !== 'ERR_SIGNALING' &&
-								error.code !== 'ERR_DATA_CHANNEL') {
+				connection.on('error', (e: any) => {
+					console.log(e);
+					if (initiator && e.code !== 'ERR_DATA_CHANNEL') {
+						if (e.code !== 'ERR_WEBRTC_SUPPORT' && e.code !== 'ERR_SIGNALING') {
 							setTimeout(() => {
 								createPeerConnection(peer, true);
 							}, 500 + Math.random() * 3000 | 0);
 						} else {
-							remote.dialog.showErrorBox('Connection Error', `A voice connection error occurred: ${error.name}\n\n${error.message}`);
+							remote.dialog.showMessageBox(
+								{
+									type: 'error',
+									title: 'Connection Error',
+									message: `A voice connection error occurred: ${e.error.name}\n\n${e.error.message}`
+								}
+							);
 						}
 					}
 				});
