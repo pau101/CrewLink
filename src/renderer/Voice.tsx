@@ -103,7 +103,7 @@ function calculateVoiceAudio(state: AmongUsState, settings: ISettings, me: Playe
 			g = 0;
 		} else if (me.isDead) {
 			g = 1;
-		} else if (state.isCommsSabotaged) {
+		} else if (state.isCommsSabotaged && (!me.isImpostor || !other.isImpostor)) {
 			g = 0;
 		} else {
 			g = 1 - map.blocked(state, me.x, me.y, other.x, other.y);
