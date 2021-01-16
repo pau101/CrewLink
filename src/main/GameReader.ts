@@ -209,7 +209,7 @@ export default class GameReader {
 
 			if (state === GameState.LOBBY || this.gameCode === 'MENU') {
 				const code = this.readMemory<number>('int32', this.gameAssembly.modBaseAddr, this.offsets.gameCode);
-				if (code) {
+				if (code && code !== 32) {
 					this.gameCode = this.intToGameCode(code);
 				}
 			} else if (state !== GameState.TASKS && state !== GameState.DISCUSSION) {
